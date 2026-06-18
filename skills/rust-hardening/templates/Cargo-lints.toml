@@ -1,0 +1,61 @@
+# Copy these blocks into your Cargo.toml to enforce the hardening gates.
+#
+# Single-crate: paste the [lints.*] tables and [profile.release] as-is.
+# Workspace:    paste under [workspace.lints.*] in the root Cargo.toml, then add
+#                   [lints]
+#                   workspace = true
+#               to each member crate's Cargo.toml.
+#
+# Hardening is the default for ALL Rust code. The only exception is test code
+# (#[cfg(test)] modules, tests/, benches/, examples/), where unwrap/expect/panic
+# are allowed — do NOT loosen these lints globally; scope an #[allow(...)] on the
+# test module/file instead (see SKILL.md, "Test code is the exception").
+
+[lints.rust]
+# Gate 1 — every compiler warning is a hard error.
+warnings = "deny"
+# FFI needs unsafe, so "deny" (NOT "forbid": forbid can't be locally overridden,
+# so it would ban the unsafe FFI blocks you actually need). Each unsafe block
+# then carries a #[allow(unsafe_code)] with a // SAFETY: comment.
+# If this crate has NO unsafe at all, tighten this to "forbid".
+unsafe_code = "deny"
+# Require an explicit `unsafe {}` block inside `unsafe fn` bodies.
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+# --- Gate 3: no hidden panics (all non-test code) ---
+unwrap_used        = "deny"   # .unwrap()
+expect_used        = "deny"   # .expect("…")
+panic              = "deny"   # panic!()
+unreachable        = "deny"   # unreachable!()
+todo               = "deny"   # todo!()
+unimplemented      = "deny"   # unimplemented!()
+indexing_slicing   = "deny"   # a[i] / &a[i..j] — panics on OOB; use .get()
+string_slice       = "deny"   # &s[a..b] — panics on a non-char boundary
+unwrap_in_result   = "deny"   # unwrap inside a fn returning Result
+
+# --- Gate 4: no silently-overflowing arithmetic ---
+arithmetic_side_effects = "deny"   # bans bare + - * / % << >> etc. on integers
+
+# --- Gate 5: don't discard a Result ---
+let_underscore_must_use = "deny"   # `let _ = result;` silently drops the error
+
+# --- Casts: ban `as`, force TryFrom/From so lossy/wrapping casts can't hide ---
+as_conversions           = "deny"
+cast_possible_truncation = "deny"
+cast_possible_wrap       = "deny"
+cast_sign_loss           = "deny"
+cast_lossless            = "warn"
+
+# --- Float foot-guns ---
+float_cmp           = "deny"  # `==` on floats; compare against an epsilon
+lossy_float_literal = "deny"
+
+# --- Raise the floor (priority -1 so specific denies above win) ---
+pedantic = { level = "warn", priority = -1 }
+
+# Gate 4 runtime backstop: overflow checks are on in debug by default but OFF in
+# release — turn them on so anything the lint can't see (e.g. inlined generics
+# from dependencies) still traps instead of wrapping silently.
+[profile.release]
+overflow-checks = true
