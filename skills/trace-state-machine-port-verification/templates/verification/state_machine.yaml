@@ -1,0 +1,63 @@
+# Starter state machine. Copy into the target repo's verification/ and adapt.
+# See ../../reference/state-machine-format.md for the full format and the
+# accepting-vs-terminal distinction.
+name: example_lifecycle
+version: 1
+initial: Idle
+
+# No semantic events allowed after a terminal state.
+terminal:
+  - Finished
+  - Failed
+
+# Legitimate end states. BOTH Finished and Failed are valid completions, so both
+# are accepting — a clean error path is a valid trace. Whether a given input should
+# have succeeded or failed is decided by differential terminal-state equivalence
+# (see ../../reference/differential-checks.md), NOT by accepting membership.
+# List a terminal state here only if reaching it is a legitimate end; leave out
+# illegitimate dead-ends (e.g. a "stuck"/aborted state) so the monitor rejects them.
+accepting:
+  - Finished
+  - Failed
+
+states:
+  Idle: {}
+  Started: {}
+  HeaderReady: {}
+  BodyReady: {}
+  Finished: {}
+  Failed: {}
+
+transitions:
+  - from: Idle
+    event: Start
+    to: Started
+
+  - from: Started
+    event: HeaderParsed
+    to: HeaderReady
+    guard: "params.get('kind') in ('v1', 'v2')"
+
+  - from: HeaderReady
+    event: BodyAccepted
+    to: BodyReady
+    guard: "params.get('bytes', 0) >= 0"
+
+  - from: BodyReady
+    event: Finish
+    to: Finished
+
+  # `from` may be a single state or a list of states.
+  - from: [Idle, Started, HeaderReady, BodyReady]
+    event: ErrorRaised
+    to: Failed
+    guard: "params.get('code', '') != ''"
+
+forbidden:
+  - state: Idle
+    event: Finish
+    reason: "cannot finish before start"
+
+  - state: Finished
+    event: BodyAccepted
+    reason: "cannot accept body after finish"
