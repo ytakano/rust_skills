@@ -46,6 +46,10 @@ Rust, confirm:
 
 ## Rules by category
 
+> Each rule below carries the same number used in
+> [EvaluationCatalog.md](EvaluationCatalog.md), where every rule has a concrete
+> legal/illegal C code pair.
+
 ### Valid-value violations — #1, #2, #3, #5, #23, #24
 
 A Rust type with restricted valid values (`bool`, `char`, field-less enum, `NonZero*`,
@@ -189,3 +193,7 @@ Reach for the safe construct by default:
 - **Keep the C contract written down.** For each `extern "C"` symbol, document the assumed
   Rust-side binding (nullability, ownership/who-frees, valid-value range, aliasing, lifetime)
   next to the declaration, so reviewers can check the C side against it.
+- **Concrete C test cases.** For a legal/illegal C code pair per rule — plus a
+  suggested test grouping and per-case metadata schema — see
+  [EvaluationCatalog.md](EvaluationCatalog.md), and use it to build the
+  both-paths suite above.
