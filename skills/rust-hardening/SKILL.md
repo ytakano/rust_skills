@@ -1,6 +1,6 @@
 ---
 name: rust-hardening
-description: Use whenever writing, reviewing, or generating Rust code — hardening is the default for all Rust, not just production. Enforces a zero-warning / zero-clippy-finding build, bans panicking constructs (unwrap/expect/panic/indexing/slicing) in non-test code, forbids silently-overflowing arithmetic and lossy `as` casts in favor of explicit checked/saturating/wrapping ops and TryFrom, requires that no Result is discarded with `let _`, and requires rustfmt. Test code (#[cfg(test)], tests/, benches/, examples/) may freely use unwrap/expect/panic.
+description: Use whenever writing, reviewing, or generating Rust code — hardening is the default for all Rust, not just production. Enforces a zero-warning / zero-clippy-finding build, bans panicking constructs (unwrap/expect/panic/indexing/slicing) in non-test code, forbids silently-overflowing arithmetic and lossy `as` casts in favor of explicit checked/saturating/wrapping ops and TryFrom, requires that no Result is discarded with `let _`, and requires rustfmt. Lint suppression is the rare, self-cleaning exception: `#[expect(reason=…)]` over `#[allow]`, at the narrowest scope, only from an explicit production allowlist — while generated code and test code (#[cfg(test)], tests/, benches/, examples/) may relax freely.
 ---
 
 # Rust hardening (default for all Rust code)
@@ -69,6 +69,9 @@ cast_lossless = "warn"
 # Float foot-guns.
 float_cmp = "deny"                # `==` on floats; compare with an epsilon
 lossy_float_literal = "deny"
+# Suppression hygiene — every allow/expect must justify itself, and prefer #[expect].
+allow_attributes = "warn"               # nudge #[allow] -> #[expect] (self-cleaning)
+allow_attributes_without_reason = "deny" # no silent allow: reason = "…" is mandatory
 # Raise the floor.
 pedantic = { level = "warn", priority = -1 }
 ```
@@ -93,15 +96,9 @@ Rust's invariants — follow the **rust-c-ffi-safety** skill, and run `cargo +ni
 
 ## Gate 1 & 2 — warnings and clippy are errors, never noise
 
-- **Never** silence a finding without justification. Do not blanket-`allow`; do not delete the
-  lint. If a finding is a genuine false positive, suppress it at the **narrowest** scope with
-  a written reason:
-
-  ```rust
-  // SAFETY/REASON: index is bounded by the `for i in 0..v.len()` above.
-  #[allow(clippy::indexing_slicing)]
-  let x = v[i];
-  ```
+- **Never** silence a finding without justification, and never blanket-`allow`. Suppression is a
+  rare, scoped, self-cleaning exception governed by its own policy — see
+  "Suppressing a lint — the allow/expect policy" below.
 
 - **Run the full surface**, not just the default target:
 
@@ -111,6 +108,66 @@ Rust's invariants — follow the **rust-c-ffi-safety** skill, and run `cargo +ni
 
 - A clippy finding is a real defect until proven otherwise. Read the message and the lint's
   rationale; fix the code, don't pacify the linter.
+
+## Suppressing a lint — the allow/expect policy
+
+A suppression is a hole in the gates. The policy keeps every hole **rare, narrow, justified, and
+self-cleaning**, and it differs by where the code comes from.
+
+**Default: don't suppress — fix.** The first response to a finding is to remove the construct that
+triggers it: `.get()`/iterators instead of indexing, `checked_*`/`saturating_*` instead of bare
+arithmetic, `TryFrom` instead of `as`, a `Result` instead of `unwrap`. A module-wide
+`#![allow(clippy::indexing_slicing)]` doesn't just excuse the one provably-safe index — it silently
+excuses every future panic-capable index in that module. Reach for a suppression only after a
+finding is shown to be a genuine false positive.
+
+**Prefer `#[expect]` over `#[allow]`.** `#[expect(lint, reason = "…")]` warns when the lint *stops*
+firing, so a suppression that is no longer needed (because the code was refactored) surfaces itself
+instead of rotting in place. The `allow_attributes`/`allow_attributes_without_reason` lints in the
+config above enforce this: `#[allow]` is nudged toward `#[expect]`, and **every** suppression must
+carry a `reason = "…"`.
+
+```rust
+// false positive: constant index into a fixed-size 4-vector, statically in bounds.
+#[expect(clippy::indexing_slicing, reason = "constant index into [_; 4], in bounds")]
+let w = quat[3];
+```
+
+**Three tiers — where a suppression is allowed:**
+
+| Tier | Policy | Form |
+|---|---|---|
+| **Generated code** (bindgen, prost, `build.rs` output) | Free to relax — you don't own the style. | one module-scoped `#[allow(…, reason = "bindgen-generated")]`, or have the generator emit `#![allow(...)]` |
+| **Test code** (`#[cfg(test)]`, `tests/`, `benches/`, `examples/`, `build.rs`) | Free to relax — `unwrap`/`expect`/`panic`/indexing are idiomatic assertions. | scoped `#[allow(…, reason = "test code")]` on the module/file (see "Test code is the exception") |
+| **Production** (everything else) | **Forbidden by default.** A suppression is allowed only for a lint on the project's **explicit allowlist**, at the **narrowest** scope (expression/statement/fn — *never* module-wide), via `#[expect(…, reason = "…")]`. | `#[expect(clippy::<allowlisted>, reason = "…")]` |
+
+**Never a module-wide `#![allow]` in production — no exception, not even for numeric kernels.**
+Decompose it to the specific items (functions/expressions) that actually trip the lint, each with
+its own reasoned `#[expect]`/`#[allow]`. A file-level `#![allow]` is forbidden because it also
+silently covers any non-kernel helper added to the file later (and it suppresses the lint inside the
+file's `#[cfg(test)] mod tests`, hiding what the test module really relies on). Per-function scope
+keeps the blast radius to the function that needs it. (The generated-code and test tiers below may
+still use a single block `#[allow]` on the generated module / `mod tests`.)
+
+**The production allowlist.** The project pins, in one place (`Cargo.toml` comment),
+the short list of lints that *may* be excepted in production and the condition that makes each
+legitimate. A reasonable default:
+
+| Lint | May be excepted only for | Why narrow |
+|---|---|---|
+| `arithmetic_side_effects` | **f64/f32 float math** | floats can't integer-overflow. Integer arithmetic must use `checked_*` — `overflow-checks = true` makes an integer `allow` a *panic* source, not a silent one |
+| `indexing_slicing` | **constant indices into fixed-size `[_; N]` / `SMatrix`** | provably in bounds; any *dynamic* index must use `.get()` |
+| `as_conversions`, `cast_*` | a **deliberate, documented** conversion (e.g. an f32 pipeline mirroring C++) | a lossy cast on a length/size is a memory-safety bug; keep `TryFrom` elsewhere |
+
+**Absolute-never (no allowlist entry, ever, in production):** `unwrap_used`, `expect_used`,
+`panic`, `unreachable`, `todo`, `unimplemented`, `string_slice`. These are the constructs the gates
+exist to remove; suppressing them defeats the point.
+
+**Enforcement.** `allow_attributes_without_reason = "deny"` is the first line — no suppression
+compiles without a reason. The second line is a CI check (a `grep` over the production sources,
+excluding `#[cfg(test)]` blocks and the generated module, or a `dylint` lint) that **rejects any
+production `allow`/`expect` of a lint not on the allowlist**. Together they make "allow is the rare,
+justified exception" mechanically true rather than a matter of discipline.
 
 ## Gate 3 — no hidden panics in non-test code
 
@@ -204,11 +261,14 @@ if let Err(e) = file.write_all(&buf) {
 - `?` is the default. Convert between error types with `From`/`thiserror`'s `#[from]` rather
   than `.map_err(|_| ...)` that throws away the cause.
 
-## Test code is the exception
+## Test code and generated code are the exceptions
 
-Hardening is the default for **all** Rust. The one relaxation is **test code**, where
-`unwrap`/`expect`/`panic!` are the idiomatic, clearest way to assert a precondition or fail a
-test, and bare arithmetic on small known constants is fine:
+Hardening is the default for **all** Rust. The two tiers that may relax freely (see the policy
+table above) are **test code** and **generated code** — both still require a `reason = "…"` on the
+suppression, but the *what* is unrestricted there.
+
+**Test code** — `unwrap`/`expect`/`panic!` are the idiomatic, clearest way to assert a precondition
+or fail a test, and bare arithmetic on small known constants is fine:
 
 - Applies to: `#[cfg(test)]` modules, the `tests/` directory, `benches/`, `examples/`, and
   `build.rs`.
@@ -216,16 +276,28 @@ test, and bare arithmetic on small known constants is fine:
 
   ```rust
   #[cfg(test)]
-  #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
+  #[allow(
+      clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing,
+      reason = "test code"
+  )]
   mod tests { /* unwrap/expect/panic freely here */ }
   ```
 
 - Integration tests under `tests/` and `examples/` can be exempted per-file with an inner
-  attribute: `#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]`.
+  attribute: `#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, reason = "test code")]`.
 
-Everything else — including `main()`, CLI glue, and one-off helpers — is held to the full bans.
-A `main()` that `?`-propagates into `fn main() -> anyhow::Result<()>` is preferred over one that
-unwraps.
+**Generated code** — bindgen/prost output and other generated modules don't follow your style and
+shouldn't be hand-edited. Wrap the generated module in a single suppression with a reason, or have
+the generator emit it:
+
+```rust
+#[allow(clippy::all, clippy::pedantic, reason = "bindgen-generated")]
+mod ffi_bindings { include!(concat!(env!("OUT_DIR"), "/bindings.rs")); }
+```
+
+Everything else — including `main()`, CLI glue, and one-off helpers — is held to the full bans
+(and to the production allowlist for any suppression). A `main()` that `?`-propagates into
+`fn main() -> anyhow::Result<()>` is preferred over one that unwraps.
 
 ## Verification — run before declaring done
 
@@ -253,9 +325,11 @@ Pre-merge checklist:
 - [ ] `cargo fmt --all` applied; `cargo fmt --all -- --check` is clean.
 - [ ] `cargo build` and `cargo clippy -- -D warnings` produce **zero** warnings across
       `--all-targets --all-features`.
-- [ ] No `unwrap`/`expect`/`panic!`/`unreachable!`/`a[i]`/`&a[i..j]` outside test code; test
-      modules carry a scoped `#[allow(...)]`, any other exception a narrow `#[allow]` with a
-      written justification.
+- [ ] No `unwrap`/`expect`/`panic!`/`unreachable!`/`a[i]`/`&a[i..j]` outside test code.
+- [ ] No module-wide `#![allow]` in production; suppressions are narrow `#[expect(…, reason = "…")]`
+      from the project allowlist only. Generated/test code carries a scoped, reasoned `#[allow]`.
+- [ ] `allow_attributes` + `allow_attributes_without_reason` are in the `[lints]` config (every
+      suppression carries a `reason`); the allowlist CI check passes.
 - [ ] No bare `+ - * / %` on integers in non-test code; every op is `checked_*`/
       `saturating_*`/`wrapping_*` with the intended policy; no `as` numeric casts.
 - [ ] No `Result` discarded via `let _ =`; errors are propagated or handled.
