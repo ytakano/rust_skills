@@ -5,7 +5,9 @@ Template — copy into the target repo's verification/ and adapt the rules.
 See ../../reference/normalization.md.
 
 Normalization removes NOISE only. It must never erase a meaningful spec difference
-(a missing close, a different outcome, commit vs rollback, ...).
+(a missing close, a different outcome, commit vs rollback, ...), and it must
+never round floating-point values. Numeric tolerances belong exclusively in
+equivalence_contract.json and diff_trace.py.
 
 Usage:
     python normalize_trace.py raw.trace.jsonl > normalized.jsonl
@@ -25,6 +27,13 @@ DROP_FIELDS = {"ts", "timestamp", "ptr", "addr", "thread_name"}
 
 # Params that carry nondeterministic ids to be stabilized per scope.
 ID_PARAMS = ("session", "resource", "tx", "task")
+
+
+def reject_nonstandard_constant(value):
+    raise ValueError(
+        f"non-standard JSON number {value!r}; encode as "
+        '"nan", "+inf", or "-inf"'
+    )
 
 
 def normalize_error(impl, params):
@@ -51,7 +60,14 @@ def main(argv):
         line = line.strip()
         if not line:
             continue
-        ev = json.loads(line)
+        try:
+            ev = json.loads(
+                line, parse_constant=reject_nonstandard_constant
+            )
+        except (json.JSONDecodeError, ValueError) as exc:
+            sys.exit(f"{argv[1]}:{seq + 1}: invalid JSON event: {exc}")
+        if not isinstance(ev, dict):
+            sys.exit(f"{argv[1]}:{seq + 1}: event must be a JSON object")
 
         for f in DROP_FIELDS:
             ev.pop(f, None)
@@ -74,8 +90,15 @@ def main(argv):
         ev["params"] = params
         seq += 1
         ev["seq"] = seq  # re-sequence after dropping non-semantic events
-        # impl is dropped from the comparison key downstream; keep or drop as needed.
-        sys.stdout.write(json.dumps(ev, sort_keys=True) + "\n")
+        # Keep `impl`; the contract accounts for it as an explicit, reasoned ignore.
+        try:
+            encoded = json.dumps(ev, sort_keys=True, allow_nan=False)
+        except ValueError as exc:
+            sys.exit(
+                f"{argv[1]}:{seq}: non-finite numeric value: {exc}; "
+                'encode as "nan", "+inf", or "-inf"'
+            )
+        sys.stdout.write(encoded + "\n")
 
 
 if __name__ == "__main__":

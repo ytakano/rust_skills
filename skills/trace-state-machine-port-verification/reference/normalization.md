@@ -8,6 +8,18 @@ directly. Implement it as `normalize_trace.py` (see
 specification differences. Every normalization rule you add is a claim that "this difference
 is allowed by the spec" — be able to justify it.
 
+Normalization and approximate comparison are separate operations:
+
+```text
+normalize   -> remove/canonicalize specification-approved noise
+compare     -> apply the field policy from equivalence_contract.json
+```
+
+Never round, truncate, bucket, stringify, or otherwise reduce floating-point precision during
+normalization. Use `abs_rel`, `ulp`, or `bit_exact` in the equivalence contract. Tolerances come
+from the specification, numeric error analysis, or an external resolution—not from observed
+C++/Rust differences.
+
 ## What to normalize
 
 - Implementation-specific fields
@@ -55,3 +67,9 @@ If you find yourself normalizing any of these away, you are hiding a real differ
 - Commit vs rollback
 - A changed protocol state transition
 - An extra or missing external side effect
+- A numeric difference that changes an event, state transition, success/error outcome,
+  commit/rollback decision, or side effect
+
+Every dropped or canonicalized field must also be accounted for as an explicitly ignored or
+normalized path in the observability matrix. Unknown/unmapped data fails; it is never passed
+through or dropped opportunistically.

@@ -2,7 +2,24 @@
 
 The abstract trace is the shared language both the C++ original and the Rust port speak.
 Both implementations must emit the **same event names and parameter shapes** so their
-behavior can be compared.
+behavior can be compared. The authoritative shapes and comparison policies live in
+`verification/equivalence_contract.json`; validate both traces against it before comparison.
+
+## Complete observable inventory first
+
+“Complete” means every **in-scope specification-level observable**, not every local variable.
+Before instrumentation, fill in `trace_schema.md` with:
+
+- every public return value and error kind;
+- every specification state and state-changing value;
+- every early-return, exception, cleanup, and resource-lifecycle outcome;
+- stdout, stderr, and exit code;
+- files, database changes, network requests, and other persistent/external side effects;
+- the C++ and Rust observation point, contract path, comparator, and exercising tests.
+
+If a value has no contract path, it is not being compared. If a contract path has no
+observation point or test, it is not verified. Do not declare the port complete with a blank
+matrix cell.
 
 ## Abstract trace
 
@@ -66,13 +83,24 @@ task        Validating async behavior
 cause       Causal relationships must be represented
 ```
 
+When adding a conditional field, add it to `equivalence_contract.json` at the same time.
+Unknown fields are rejected; this prevents a newly emitted semantic value from being silently
+ignored by an older comparator.
+
+Standard JSON has no portable NaN or infinity literals. Encode non-finite floats as `"nan"`,
+`"+inf"`, and `"-inf"` and give each float field an explicit `abs_rel`, `ulp`, or `bit_exact`
+policy. See [equivalence-contract.md](./equivalence-contract.md).
+
 ## Trace output mechanism
 
 Define the emission mechanism once so both implementations behave identically and runs are
 reproducible:
 
-- **Sink**: each implementation writes JSON Lines to the path in the `TRACE_OUT` environment
-  variable. If `TRACE_OUT` is unset, tracing is disabled (zero behavioral impact).
+- **Trace sink**: each implementation writes JSON Lines to the path in the `TRACE_OUT`
+  environment variable. If `TRACE_OUT` is unset, tracing is disabled (zero behavioral impact).
+- **Side-effect sink**: when the contract uses manifest mode, an independent observer writes
+  canonical JSON to `SIDE_EFFECTS_OUT`. Prefer filesystem snapshots, database queries, and
+  captured fake-service requests over self-reporting from the application.
 - **Truncate, don't append**: open `TRACE_OUT` with truncation at process start so each run
   produces a clean file. Never append across runs.
 - **Flush**: flush after every event (or flush on exit and on every error path) so traces
@@ -95,3 +123,7 @@ Never compare these raw — normalize first (see [normalization.md](./normalizat
 - C++-specific or Rust-specific internal function names
 - Debug log strings treated as specification traces
 - Hash-map iteration order unless explicitly canonicalized
+
+Do not treat floating-point rounding as normalization. Preserve the value and apply the
+field-specific numeric policy in the equivalence checker. Rounding creates discontinuities and
+can hide specification-relevant differences.

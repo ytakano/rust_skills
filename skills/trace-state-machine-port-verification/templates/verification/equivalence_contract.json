@@ -1,0 +1,161 @@
+{
+  "version": 1,
+  "trace": {
+    "ordering": "total",
+    "event_schema": {
+      "type": "object",
+      "required": [
+        "version",
+        "run_id",
+        "seq",
+        "impl",
+        "component",
+        "event",
+        "params"
+      ],
+      "properties": {
+        "version": {
+          "type": "integer",
+          "compare": {
+            "kind": "exact"
+          }
+        },
+        "run_id": {
+          "type": "string",
+          "compare": {
+            "kind": "ignore",
+            "reason": "identifies one execution and differs by construction"
+          }
+        },
+        "seq": {
+          "type": "integer",
+          "compare": {
+            "kind": "ignore",
+            "reason": "normalization re-sequences each trace independently"
+          }
+        },
+        "impl": {
+          "type": "string",
+          "compare": {
+            "kind": "ignore",
+            "reason": "distinguishes the C++ and Rust implementations"
+          }
+        },
+        "component": {
+          "type": "string",
+          "compare": {
+            "kind": "exact"
+          }
+        },
+        "event": {
+          "type": "string",
+          "compare": {
+            "kind": "exact"
+          }
+        },
+        "params": {
+          "type": "event_params"
+        }
+      },
+      "additional_properties": false
+    },
+    "events": {
+      "Start": {
+        "description": "run or session begins",
+        "params": {
+          "type": "object",
+          "required": [],
+          "properties": {},
+          "additional_properties": false
+        }
+      },
+      "HeaderParsed": {
+        "description": "a supported header was parsed",
+        "params": {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "compare": {
+                "kind": "exact"
+              }
+            }
+          },
+          "additional_properties": false
+        }
+      },
+      "BodyAccepted": {
+        "description": "the declared number of body bytes was accepted",
+        "params": {
+          "type": "object",
+          "required": [
+            "bytes"
+          ],
+          "properties": {
+            "bytes": {
+              "type": "integer",
+              "compare": {
+                "kind": "exact"
+              }
+            }
+          },
+          "additional_properties": false
+        }
+      },
+      "Finish": {
+        "description": "run completed successfully",
+        "params": {
+          "type": "object",
+          "required": [],
+          "properties": {},
+          "additional_properties": false
+        }
+      },
+      "ErrorRaised": {
+        "description": "run completed with a shared terminal error",
+        "params": {
+          "type": "object",
+          "required": [
+            "code"
+          ],
+          "properties": {
+            "code": {
+              "type": "string",
+              "compare": {
+                "kind": "exact"
+              }
+            }
+          },
+          "additional_properties": false
+        }
+      }
+    }
+  },
+  "outcomes": {
+    "stdout": {
+      "type": "bytes",
+      "compare": {
+        "kind": "exact"
+      }
+    },
+    "stderr": {
+      "type": "bytes",
+      "compare": {
+        "kind": "exact"
+      }
+    },
+    "exit_code": {
+      "type": "integer",
+      "compare": {
+        "kind": "exact"
+      }
+    }
+  },
+  "side_effects": {
+    "mode": "out_of_scope",
+    "reason": "the starter lifecycle example has no external side effects; replace this with a manifest schema for a real target"
+  }
+}

@@ -1,6 +1,12 @@
 ---
 name: trace-state-machine-port-verification
-description: Use when porting a C++ implementation to Rust and you need confidence the port is behavior-equivalent. Guides the full workflow — establish a C++ baseline, design a spec-level state machine and abstract trace, instrument both sides, port to Rust, then prove observable equivalence by differential testing, with failure triage and regression tests.
+description: >-
+  Use when porting a C++ implementation to Rust and you need confidence the port is
+  behavior-equivalent. Guides the full workflow — establish a C++ baseline, inventory every
+  specification-level observable, define a fail-closed equivalence contract and state machine,
+  instrument both sides, port to Rust, then verify trace/outcome/side-effect equivalence with
+  field-specific numeric policies, complete contract coverage, comparator mutation audit,
+  failure triage, and regression tests.
 ---
 
 # C++ → Rust port verification with state machines and traces
@@ -20,8 +26,16 @@ To get there, drive the port with four checks, always together:
 4. **Failure minimization** and regression tests.
 
 > `trace_cpp ∈ M` and `trace_rust ∈ M` are **necessary but not sufficient**.
-> Always also verify `normalize(trace_cpp) ≈ normalize(trace_rust)` (where `≈` means
-> `equivalent_trace`), plus output and side-effect equivalence.
+> Always also validate both traces against the fail-closed equivalence contract, verify
+> `normalize(trace_cpp) ≈ normalize(trace_rust)` (where `≈` means the contract's
+> `equivalent_trace`), compare outcomes and side effects, cover every declared semantic path,
+> and mutation-audit the comparator.
+
+“Complete comparison” means complete accounting of **in-scope specification-level
+observables**: public results/errors, semantic state, resource lifecycle, and external side
+effects. It does not mean coupling the port to every implementation-local variable. A value
+with no observability-matrix row and contract path is not verified; an unknown or unconfigured
+value is a hard failure, never an implicit ignore.
 
 The state machine is a spec monitor — by itself it does not prove the port is equivalent.
 Do **not** treat the C++ implementation as unconditionally correct: a difference in Rust may
@@ -46,7 +60,11 @@ are missing.
 - C++ and Rust build/test commands (ask the user or infer from the repo — never hard-code).
 - Existing tests, sample inputs, fixtures, corpora, production logs.
 - Expected outputs, errors, exit codes, side effects.
+- A complete inventory of public results, semantic state, error/cleanup paths, resources, and
+  external effects, with their C++ and Rust observation points.
 - Specs, READMEs, comments, API docs, design notes, known bug fixes, edge cases.
+- Numeric requirements: precision, rounding/FMA/fast-math environment, external resolution,
+  error bounds, NaN/infinity/signed-zero behavior, and control-flow thresholds.
 - Sources of nondeterminism: randomness, time, thread scheduling, I/O ordering, hash
   iteration order, external service responses.
 - Suspected C++ undefined or implementation-defined behavior.
@@ -62,13 +80,19 @@ tools, traces, repros) are created in the **target repo**, conventionally under
    outputs, errors, exit codes, final states, and side effects. Run sanitizers (ASan, UBSan,
    TSan, Valgrind) if available. Document known UB / implementation-defined / environment-
    dependent behavior.
-2. **Design the abstract event vocabulary and trace schema.** Pick semantic events both
-   implementations can emit at meaningful boundaries; write the schema before broad
-   instrumentation. → [`reference/trace-contract.md`](./reference/trace-contract.md),
-   template [`templates/verification/trace_schema.md`](./templates/verification/trace_schema.md).
+2. **Inventory observables and define the fail-closed contract.** Fill in the observability
+   matrix before broad instrumentation: every in-scope result, error, state, lifecycle action,
+   and side effect maps to a C++ point, Rust point, contract path, comparator, and tests.
+   Make `equivalence_contract.json` the machine-readable source of truth. Every scalar has an
+   explicit policy; unknown/missing/untyped data fails; ignores and coverage waivers require
+   reasons. → [`reference/trace-contract.md`](./reference/trace-contract.md),
+   [`reference/equivalence-contract.md`](./reference/equivalence-contract.md), templates
+   [`templates/verification/trace_schema.md`](./templates/verification/trace_schema.md) and
+   [`templates/verification/equivalence_contract.json`](./templates/verification/equivalence_contract.json).
 3. **Design the spec-level state machine.** Use specs, tests, docs, and domain knowledge —
    not just C++ logs. Include normal paths, error paths, forbidden transitions, terminal vs
-   accepting states, lifecycle rules, and guards. Test both accepted and rejected traces. →
+   accepting states, lifecycle rules, guards, and any legitimate numeric boundary bands. Test
+   both accepted and rejected traces. →
    [`reference/state-machine-format.md`](./reference/state-machine-format.md), template
    [`templates/verification/state_machine.yaml`](./templates/verification/state_machine.yaml).
 4. **Instrument C++.** Add minimal, isolated, easy-to-disable tracing using the same event
@@ -81,19 +105,25 @@ tools, traces, repros) are created in the **target repo**, conventionally under
    ambiguity surfaces, document the decision rather than copying the C++ behavior blindly.
 6. **Instrument Rust** with the same abstract event API. If release events come from `Drop`,
    avoid double-counting an explicit `close`. → [`templates/rust/trace.rs`](./templates/rust/trace.rs).
-7. **Run differential tests on identical inputs** and check all five conditions (acceptance ×2,
-   trace equivalence, output equivalence, side-effect equivalence). Document which low-level
-   differences the spec allows; never accept differences in outcomes, side effects, or
-   protocol state. → [`reference/differential-checks.md`](./reference/differential-checks.md),
+7. **Run fail-closed differential tests on identical inputs.** Validate both traces against
+   the contract; check state-machine acceptance ×2, recursive trace equivalence,
+   stdout/stderr/exit equivalence, and canonical side-effect-manifest equivalence. Run C++ and
+   Rust in separate workdirs. Never accept differences in outcomes, side effects, security
+   decisions, or protocol state. → [`reference/differential-checks.md`](./reference/differential-checks.md),
    harness [`templates/verification/run_diff.py`](./templates/verification/run_diff.py).
 8. **Stand up the tooling**: normalization, the state-machine monitor, the trace-equivalence
-   checker, and the harness. → [`templates/verification/`](./templates/verification/)
-   (`normalize_trace.py`, `trace_monitor.py`, `diff_trace.py`, `run_diff.py`) and
-   [`reference/normalization.md`](./reference/normalization.md).
+   checker, the contract, and the harness. Normalization removes only approved noise; it never
+   rounds floats. Numeric tolerances live in the contract and come from the specification or
+   error analysis, never observed drift. → [`templates/verification/`](./templates/verification/)
+   and [`reference/normalization.md`](./reference/normalization.md).
 9. **Expand the input space** beyond a few hand-written cases: existing tests, sample inputs,
    production-log replay, boundary values, error-triggering inputs, historical repros,
-   property-based testing, fuzzing.
-10. **Triage and fix failures, then lock them in.** Classify before changing code, minimize,
+   property-based testing, fuzzing. Require zero missing contract paths across the corpus, and
+   separately measure state/transition/guard/error coverage.
+10. **Audit the verifier.** Mutation-audit every observed semantic scalar, required field,
+    event, and event order; semantic changes must fail and explicitly ignored values must remain
+    ignored. Treat any audit failure as a broken verifier, not evidence about the port.
+11. **Triage and fix failures, then lock them in.** Classify before changing code, minimize,
     save a repro, and add a regression test. → [`reference/failure-triage.md`](./reference/failure-triage.md).
 
 Track completion and report results against
@@ -105,6 +135,12 @@ Track completion and report results against
 - Define the state machine solely from current C++ behavior without checking the intended spec.
 - Loosen the state machine, or add a normalization rule, to make an incorrect Rust trace pass.
 - Compare raw debug logs as if they were semantic traces.
+- Hand-select a few “important” values while silently ignoring the rest.
+- Accept an unknown event/field, a missing required value, or a scalar without a comparison
+  policy.
+- Round or truncate floats during normalization, or choose epsilon from the current failures.
+- Use approximate numeric equality to hide a changed event, terminal state, success/error,
+  commit/rollback result, security decision, or external side effect.
 - Compare memory addresses, wall-clock time, random IDs, or hash order without normalization.
 - Reproduce C++ undefined behavior in Rust just to match the original.
 - Let trace instrumentation change program behavior.
@@ -129,16 +165,40 @@ python verification/normalize_trace.py /tmp/rust.trace.jsonl > /tmp/rust.norm.js
 python verification/trace_monitor.py verification/state_machine.yaml /tmp/cpp.norm.jsonl
 python verification/trace_monitor.py verification/state_machine.yaml /tmp/rust.norm.jsonl
 
-# 4. Compare normalized traces, then outputs.
-python verification/diff_trace.py /tmp/cpp.norm.jsonl /tmp/rust.norm.jsonl
+# 4. Compare every declared field and mutation-audit the comparator.
+python verification/diff_trace.py \
+  --contract verification/equivalence_contract.json \
+  --audit \
+  --coverage-out /tmp/trace-coverage.json \
+  /tmp/cpp.norm.jsonl /tmp/rust.norm.jsonl
 diff -u /tmp/cpp.out /tmp/rust.out
 ```
 
-Once this works for one case, drive it over a corpus with
-[`templates/verification/run_diff.py`](./templates/verification/run_diff.py).
+The manual flow is only a bring-up check. For complete verification, drive the full corpus
+through the harness so stderr, exit code, isolated side-effect manifests, aggregate contract
+coverage, audit, and repro preservation are enforced:
+
+```bash
+python verification/run_diff.py \
+  --cpp-bin build/original \
+  --rust-bin target/debug/ported \
+  --state-machine verification/state_machine.yaml \
+  --contract verification/equivalence_contract.json \
+  --cases verification/corpus \
+  --coverage-out verification/coverage.json \
+  --repro-dir verification/repro
+```
+
+Run the scaffold's own comparator/harness tests whenever adapting the contract or tools:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 \
+  python -m unittest -v verification/test_diff_trace.py
+```
 
 ## Final rule
 
 Make the Rust implementation specification-correct and observably equivalent to the C++
-original for the same inputs, with ongoing verification through traces, state-machine
-monitoring, differential testing, and regression tests.
+original for the same inputs. Account for every in-scope observable in a fail-closed contract,
+exercise every declared semantic path, audit the verifier's sensitivity, and preserve ongoing
+confidence through state-machine monitoring, differential testing, and regression tests.

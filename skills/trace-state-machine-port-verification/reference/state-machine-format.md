@@ -27,6 +27,10 @@ historical bug fixes, domain knowledge, and expected user-visible behavior.
   not automatically the specification.
 - Do **not** loosen the state machine to make an incorrect Rust trace pass.
 - Always test both accepted and rejected traces.
+- Guards over floating-point values need a specification-derived boundary policy. A tolerance
+  may compare a numeric parameter, but it must not make different transitions or terminal
+  outcomes equivalent. If a boundary band is legitimately nondeterministic, encode the allowed
+  transitions explicitly and test both sides of the band.
 
 ## Format (YAML by default)
 

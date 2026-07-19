@@ -16,7 +16,8 @@ rust_rejected
 
 trace_mismatch
   Both traces are accepted, but the normalized C++ and Rust traces are not equivalent.
-  Possible causes: Rust port bug, or a missing/incorrect equivalence (normalization) rule.
+  Possible causes: Rust port bug, instrumentation bug, or an incorrect contract/normalization
+  rule. Do not loosen the rule until the specification justifies the difference.
 
 output_mismatch
   Traces are equivalent, but outputs differ.
@@ -33,6 +34,22 @@ nondeterministic_failure
 instrumentation_bug
   Tracing changes behavior or emits events at the wrong place.
   Fix instrumentation before changing the port.
+
+contract_error
+  An event/field is unknown, missing, mistyped, or lacks a comparison policy.
+  Fix the observability inventory, instrumentation, or contract; never ignore it implicitly.
+
+coverage_gap
+  A declared semantic event/field was never observed in the corpus.
+  Add a boundary/error/path case, or document a narrow reasoned coverage waiver.
+
+comparator_audit_failure
+  A semantic mutation passed, or an explicitly ignored value was compared.
+  Fix the comparator before drawing any conclusion about the port.
+
+numeric_mismatch
+  A float violates its specification-derived abs/rel, ULP, or bit policy.
+  Check arithmetic environment and algorithm; do not tune tolerance to the observed failure.
 ```
 
 When a C++ trace is rejected (`cpp_rejected`), classify the cause before editing anything:
@@ -43,6 +60,7 @@ B. The C++ implementation has an existing bug.
 C. The trace instrumentation is placed incorrectly.
 D. The normalization rules are wrong.
 E. The test input or expectation is wrong.
+F. The equivalence contract or its numeric policy is incomplete or wrong.
 ```
 
 Remember: the C++ implementation is **not** unconditionally correct. A difference in Rust may
@@ -57,12 +75,21 @@ Every discovered failure must be preserved (in the target repo, under `verificat
 verification/repro/<issue-name>/input
 verification/repro/<issue-name>/cpp.trace.jsonl
 verification/repro/<issue-name>/rust.trace.jsonl
-verification/repro/<issue-name>/normalized_cpp.jsonl
-verification/repro/<issue-name>/normalized_rust.jsonl
-verification/repro/<issue-name>/README.md
+verification/repro/<issue-name>/cpp.normalized.jsonl
+verification/repro/<issue-name>/rust.normalized.jsonl
+verification/repro/<issue-name>/cpp.stdout
+verification/repro/<issue-name>/rust.stdout
+verification/repro/<issue-name>/cpp.stderr
+verification/repro/<issue-name>/rust.stderr
+verification/repro/<issue-name>/cpp.exit_code
+verification/repro/<issue-name>/rust.exit_code
+verification/repro/<issue-name>/cpp.side_effects.json    # manifest mode
+verification/repro/<issue-name>/rust.side_effects.json   # manifest mode
+verification/repro/<issue-name>/report.json
 ```
 
-The repro `README.md` should include:
+The repro `report.json` records the automated mismatches and audit failures. Add a companion
+README when human investigation is complete, covering:
 
 - Failure class
 - Expected specification behavior
