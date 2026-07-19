@@ -37,7 +37,10 @@ unwrap_in_result   = "deny"   # unwrap inside a fn returning Result
 # --- Gate 4: no silently-overflowing arithmetic ---
 arithmetic_side_effects = "deny"   # bans bare + - * / % << >> etc. on integers
 
-# --- Gate 5: don't discard a Result ---
+# --- Gate 5: propagate failures unless recovery fulfills the contract ---
+# This catches only one spelling. It does not catch `_ignored`, `.ok()`, default
+# substitution, ignored overflow flags, or logging-only handlers; review those
+# semantically as required by SKILL.md.
 let_underscore_must_use = "deny"   # `let _ = result;` silently drops the error
 
 # --- Casts: ban `as`, force TryFrom/From so lossy/wrapping casts can't hide ---

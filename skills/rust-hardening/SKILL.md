@@ -1,6 +1,16 @@
 ---
 name: rust-hardening
-description: Use whenever writing, reviewing, or generating Rust code — hardening is the default for all Rust, not just production. Enforces a zero-warning / zero-clippy-finding build, bans panicking constructs (unwrap/expect/panic/indexing/slicing) in non-test code, forbids silently-overflowing arithmetic and lossy `as` casts in favor of explicit checked/saturating/wrapping ops and TryFrom, requires that no Result is discarded with `let _`, and requires rustfmt. Lint suppression is the rare, self-cleaning exception: `#[expect(reason=…)]` over `#[allow]`, at the narrowest scope, only from an explicit production allowlist — while generated code and test code (#[cfg(test)], tests/, benches/, examples/) may relax freely.
+description: >-
+  Use whenever writing, reviewing, or generating Rust code — hardening is the default for all
+  Rust, not just production. Enforces a zero-warning / zero-clippy-finding build, bans panicking
+  constructs (unwrap/expect/panic/indexing/slicing) in non-test code, forbids silently-overflowing
+  arithmetic and lossy `as` casts, and requires runtime failures from arithmetic, indexing,
+  conversion, and other fallible operations to propagate as Result unless local recovery
+  completes the documented contract. Also bans erasing failures through underscore bindings,
+  default substitution, Result-to-Option conversion, or ignored overflow flags, and requires
+  rustfmt. Lint suppression is the rare, self-cleaning exception: `#[expect(reason=…)]` over
+  `#[allow]`, at the narrowest scope, only from an explicit production allowlist — while
+  generated code and test code (#[cfg(test)], tests/, benches/, examples/) may relax freely.
 ---
 
 # Rust hardening (default for all Rust code)
@@ -22,10 +32,12 @@ Five non-negotiable gates, always together:
 2. **No clippy findings.** Clippy runs in CI with `-D warnings`; its output is never ignored.
 3. **No hidden panics.** `unwrap`, `expect`, `panic!`, indexing, slicing, and friends are denied
    in all non-test code — fallibility is expressed in the type system (`Result`/`Option`).
-4. **No silent overflow.** Bare `+ - * / %` on integers are forbidden; every arithmetic
-   operation states its overflow behavior (`checked_*`, `saturating_*`, `wrapping_*`).
-5. **No swallowed errors.** A `Result` is never discarded with `let _ =`; fallibility is
-   propagated or handled, not dropped.
+4. **No silent overflow.** Bare `+ - * / %` on integers are forbidden. Runtime-dependent
+   arithmetic uses `checked_*` and propagates failure; saturating or wrapping behavior is allowed
+   only when it is part of the documented algorithm or API contract.
+5. **No swallowed failures.** Failures caused by runtime data are propagated as `Result` unless
+   local recovery still completes the function's documented contract. Renaming, logging,
+   converting to `Option`, substituting a default, or ignoring an overflow flag is not recovery.
 
 After any change, the code is run through **rustfmt** before it is considered done.
 
@@ -58,7 +70,8 @@ string_slice = "deny"             # `&s[a..b]` panics on a non-char boundary
 unwrap_in_result = "deny"
 # Silently-overflowing arithmetic — banned; be explicit instead.
 arithmetic_side_effects = "deny"
-# Don't drop a Result on the floor.
+# Catch one common way to drop a Result. Gate 5 also requires semantic review:
+# this lint does not catch `_ignored`, `.ok()`, default substitution, or ignored flags.
 let_underscore_must_use = "deny"
 # Ban `as`; force TryFrom/From so lossy/wrapping casts can't hide.
 as_conversions = "deny"
@@ -115,8 +128,9 @@ A suppression is a hole in the gates. The policy keeps every hole **rare, narrow
 self-cleaning**, and it differs by where the code comes from.
 
 **Default: don't suppress — fix.** The first response to a finding is to remove the construct that
-triggers it: `.get()`/iterators instead of indexing, `checked_*`/`saturating_*` instead of bare
-arithmetic, `TryFrom` instead of `as`, a `Result` instead of `unwrap`. A module-wide
+triggers it: `.get()`/iterators instead of indexing, `checked_*` instead of fallible bare
+arithmetic (or documented saturating/wrapping semantics when the contract requires them),
+`TryFrom` instead of `as`, a `Result` instead of `unwrap`. A module-wide
 `#![allow(clippy::indexing_slicing)]` doesn't just excuse the one provably-safe index — it silently
 excuses every future panic-capable index in that module. Reach for a suppression only after a
 finding is shown to be a genuine false positive.
@@ -179,9 +193,9 @@ fallibility instead (this applies to all non-test code — libraries, binaries, 
 | `opt.unwrap()` | `opt.ok_or(Error::Missing)?` |
 | `res.unwrap()` / `.expect("…")` | `res?` (or `.map_err(...)?`) |
 | `slice[i]` | `slice.get(i).ok_or(Error::OutOfRange)?` |
-| `&slice[a..b]` / `&s[a..b]` | `slice.get(a..b)` (`str` slicing also panics off a char boundary) |
-| `vec.remove(i)` / `insert` / `swap_remove` / `split_at(n)` | check `len` first, or use `get`/`split_at_checked` |
-| `a / b` / `a % b` | `a.checked_div(b)` / `checked_rem` (zero / `MIN`-by-`-1` panic) |
+| `&slice[a..b]` / `&s[a..b]` | `slice.get(a..b).ok_or(Error::OutOfRange)?` (`str` slicing also validates char boundaries) |
+| `vec.remove(i)` / `insert` / `swap_remove` / `split_at(n)` | check `len` and return `Err` when invalid, or use a checked API and propagate failure |
+| `a / b` / `a % b` | `a.checked_div(b).ok_or(Error::InvalidDivision)?` / `checked_rem(...).ok_or(...)?` |
 | `cell.borrow_mut()` | `cell.try_borrow_mut()?` (panics on an active borrow) |
 | `panic!("bad state")` | `return Err(Error::BadState)` |
 | `unreachable!()` on external input | model the case and return `Err` |
@@ -189,9 +203,8 @@ fallibility instead (this applies to all non-test code — libraries, binaries, 
 
 - Use a typed error (`thiserror` for libraries, `anyhow`/`eyre` only at application
   boundaries) and the `?` operator. Make functions return `Result<_, E>` rather than panicking.
-- `unreachable!`/`unwrap` is acceptable **only** when the invariant is locally proven and
-  cannot depend on external input — and then it must carry a comment proving it and a scoped
-  `#[allow(...)]`. Default to returning an error.
+- A locally proven invariant does not justify `unreachable!` or `unwrap` in production. Preserve
+  the proof in a comment, but still model the branch and return a typed internal-invariant error.
 - `assert!`/`debug_assert!` for internal invariants is fine, but it is not error handling for
   untrusted input — validate and return `Err` instead.
 - Mind the panics the lints can't always see: length-mismatch methods like
@@ -202,14 +215,15 @@ fallibility instead (this applies to all non-test code — libraries, binaries, 
 ## Gate 4 — arithmetic without silent overflow
 
 Bare `+ - * / %` (and `<< >>`, negation, `+=` …) on integers either panic in debug or wrap in
-release — both are bugs. `arithmetic_side_effects` denies them. Choose the behavior explicitly:
+release — both are bugs. `arithmetic_side_effects` denies them. For values derived at runtime,
+failure propagation is the default:
 
 | Need | Use | Result |
 |---|---|---|
-| Overflow is an error | `a.checked_add(b)` | `Option<T>` → `.ok_or(Error::Overflow)?` |
-| Clamp at the bound | `a.saturating_add(b)` | `T`, pinned to `MIN`/`MAX` |
-| Modular/wrapping is intended | `a.wrapping_add(b)` | `T`, documented wrap |
-| Need both value and flag | `a.overflowing_add(b)` | `(T, bool)` |
+| Runtime overflow is an error (default) | `a.checked_add(b)` | `Option<T>` → `.ok_or(Error::Overflow)?` |
+| Clamping is the documented result | `a.saturating_add(b)` | `T`, pinned to `MIN`/`MAX` |
+| Modular arithmetic is the documented algorithm | `a.wrapping_add(b)` | `T`, documented wrap |
+| The caller needs the overflow status | `a.overflowing_add(b)` | inspect and propagate the flag; never discard it |
 
 ```rust
 // Don't: silently wraps in release, panics in debug.
@@ -223,11 +237,17 @@ let total = price
 ```
 
 - Division/remainder also panic on divide-by-zero and on `MIN / -1`: use `checked_div`/
-  `checked_rem`, or validate the divisor first.
+  `checked_rem` and convert `None` to a typed error with `ok_or(...)?`. If validating the divisor
+  first, the invalid branch must likewise return an error.
 - Prefer `usize`/`u*` for counts and indices, but a subtraction like `len - n` still
-  underflows — use `checked_sub`.
+  underflows — use `checked_sub().ok_or(Error::Underflow)?`.
 - For float arithmetic, guard against `NaN`/`inf` where the result feeds a decision; floats
-  don't overflow-panic but produce silently-poisonous values.
+  don't overflow-panic but produce silently-poisonous values. Return a typed error unless the
+  documented domain explicitly defines those values.
+- `saturating_*`, `wrapping_*`, and `overflowing_*` are not generic escape hatches from error
+  handling. Use them only when that behavior is required by the documented algorithm or API
+  contract. Add a nearby comment naming that contract; for `overflowing_*`, inspect the flag and
+  propagate an error unless overflow itself is an intended output.
 - **Ban `as` for numeric casts.** `as_conversions` forbids `x as T`, which silently truncates,
   wraps, or loses sign. Use `T::try_from(x)?` when the value might not fit, or `T::from(x)` when
   it always does. This matters most for allocation sizes and lengths crossing an FFI or
@@ -237,29 +257,53 @@ let total = price
     scope a `#[allow(clippy::as_conversions)]` with a one-line reason (e.g. `// truncation is
     intended: low 8 bits only`), exactly as for any other suppressed lint.
 
-## Gate 5 — never swallow a `Result`
+## Gate 5 — propagate failures unless recovery fulfills the contract
 
-Not panicking is only half of error handling; the other half is not *dropping* the error.
+Not panicking is only half of error handling; the other half is preserving failure information.
+An operation that cannot produce its promised result must return a typed error to its caller.
+Handle a failure locally only when a bounded recovery action succeeds and the function can still
+fulfill its documented contract. Logging, recording a metric, or continuing with partial/default
+data is not recovery unless loss tolerance and the fallback are explicitly part of that contract.
 
 ```rust
-// Don't: the error is silently discarded — the write may have failed.
+// Don't: each form erases a failure.
 let _ = file.write_all(&buf);
+let _ignored = file.write_all(&buf);
+let item = slice.get(index).copied().unwrap_or_default();
+let maybe_value = parse_value(input).ok();
+let (total, _) = lhs.overflowing_add(rhs);
 
-// Do: propagate it...
+// Do: preserve the failure and propagate it.
 file.write_all(&buf)?;
-// ...or handle it deliberately.
-if let Err(e) = file.write_all(&buf) {
-    log::warn!("write failed, retrying: {e}");
-    // ...recover...
-}
+let item = slice
+    .get(index)
+    .copied()
+    .ok_or(Error::OutOfRange { index })?;
+let value = parse_value(input)?;
+let total = lhs.checked_add(rhs).ok_or(Error::Overflow)?;
 ```
 
-- `let_underscore_must_use` denies `let _ = <expr returning a #[must_use] type>`. Don't reach
-  for `let _ =` to silence "unused `Result`" — propagate with `?` or handle the error.
+- `?` is the default for failures caused by external input, runtime state, arithmetic,
+  indexing, conversion, I/O, synchronization, or allocation.
+- Use `Option` for normal domain absence ("not found" is a valid answer), not to erase the cause
+  of a failed operation. Do not call `.ok()` merely to discard a `Result`'s error.
+- Do not turn a failure-bearing `Option`/`Result` into a successful value with
+  `unwrap_or_default`, `unwrap_or`, `map_or`, or an equivalent fallback. Such a fallback is valid
+  only when the public contract names it as the intended result for that condition.
+- Do not discard a `Result` through `let _ =`, `_ignored`/other underscore-prefixed bindings,
+  `drop`, or a closure/callback that ignores the return value. Do not discard the boolean from
+  `overflowing_*`.
+- Local recovery must be real and bounded: retry/reconnect/rebuild using a documented policy,
+  verify that recovery succeeded, and propagate the final error if it did not. A log line followed
+  by normal continuation is swallowed failure, not recovery.
+- `let_underscore_must_use` denies only one common spelling,
+  `let _ = <expr returning a #[must_use] type>`. Compiler and Clippy lints do **not** prove this
+  gate: review every fallible call and use a project-specific Dylint/Semgrep/AST check when
+  mechanical enforcement is required.
 - Annotate functions whose return value must not be ignored with `#[must_use]`, and mark public
   error enums `#[non_exhaustive]` so adding a variant isn't a breaking change.
-- `?` is the default. Convert between error types with `From`/`thiserror`'s `#[from]` rather
-  than `.map_err(|_| ...)` that throws away the cause.
+- Convert between error types with `From`/thiserror's `#[from]` rather than
+  `.map_err(|_| ...)` that throws away the cause.
 
 ## Test code and generated code are the exceptions
 
@@ -330,9 +374,12 @@ Pre-merge checklist:
       from the project allowlist only. Generated/test code carries a scoped, reasoned `#[allow]`.
 - [ ] `allow_attributes` + `allow_attributes_without_reason` are in the `[lints]` config (every
       suppression carries a `reason`); the allowlist CI check passes.
-- [ ] No bare `+ - * / %` on integers in non-test code; every op is `checked_*`/
-      `saturating_*`/`wrapping_*` with the intended policy; no `as` numeric casts.
-- [ ] No `Result` discarded via `let _ =`; errors are propagated or handled.
+- [ ] No bare `+ - * / %` on integers in non-test code. Runtime-dependent arithmetic uses
+      `checked_*` and propagates failure; saturating/wrapping behavior is documented as part of
+      the algorithm/API contract; every `overflowing_*` flag is inspected.
+- [ ] No failure-bearing `Result`/`Option` is erased via `let _ =`, underscore bindings, `drop`,
+      `.ok()`, default substitution, ignored flags, logging-only handlers, or callbacks. Failures
+      propagate unless verified, bounded recovery fulfills the documented contract.
 - [ ] `[lints]` config and `overflow-checks = true` are present in `Cargo.toml`.
 - [ ] `Cargo.lock` is committed and `rust-version` (MSRV) is pinned; `cargo deny`/`cargo audit`
       pass.
