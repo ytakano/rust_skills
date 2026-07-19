@@ -1,13 +1,12 @@
 # rust_skills
 
-A collection of [Claude Code](https://claude.com/claude-code) **Skills** for writing,
-reviewing, and verifying Rust — with a focus on soundness, robustness, and correct
-C/C++ interop.
+A collection of **skills for coding agents** that write, review, and verify Rust — with
+a focus on soundness, robustness, and correct C/C++ interop.
 
-A *skill* is a Markdown file (`SKILL.md`) with YAML frontmatter that Claude loads on demand.
-Its `description` tells Claude *when* the skill applies; Claude reads the body (and any
-referenced files) only when a task matches, then follows the guidance. These skills are
-prescriptive checklists and patterns, not runnable code.
+A *skill* is a Markdown file (`SKILL.md`) with YAML frontmatter that a compatible coding
+agent loads on demand. Its `description` tells the agent *when* the skill applies; the
+agent reads the body (and any referenced files) only when a task matches, then follows
+the guidance. These skills are prescriptive checklists and patterns, not runnable code.
 
 ## Skills
 
@@ -31,7 +30,7 @@ defers patch/PR review to the review skill.
 ```
 skills/
   rust-hardening/
-    SKILL.md                     # the guidance Claude loads
+    SKILL.md                     # the guidance a coding agent loads
     templates/Cargo-lints.toml   # copy-paste lint config enforcing the gates
   rust-c-ffi-safety/
     SKILL.md
@@ -55,22 +54,20 @@ else is read only when the guidance references it.
 
 ## Using these skills
 
-Make the skills discoverable to Claude Code by placing (or symlinking) them where it looks for
-skills:
+Make the skills discoverable by placing or symlinking them in a skills directory supported
+by your coding agent. The exact location and whether project-level and user-level installation
+are supported depend on the agent, so consult its documentation.
 
-- **Per project:** copy a skill directory into the project's `.claude/skills/`.
-- **All projects (user-level):** copy it into `~/.claude/skills/`.
-
-For example:
+For example, if your agent uses `<agent-skills-dir>` as its skills directory:
 
 ```sh
-mkdir -p ~/.claude/skills
-cp -r skills/rust-hardening ~/.claude/skills/
+mkdir -p <agent-skills-dir>
+cp -r skills/rust-hardening <agent-skills-dir>/
 ```
 
-Once installed, Claude invokes a skill automatically when a task matches its `description`, or
-you can request it explicitly (e.g. "use the rust-hardening skill"). The skills are also useful
-as standalone checklists for human reviewers.
+Once installed, a compatible agent can invoke a skill automatically when a task matches its
+`description`; you can also request it explicitly (for example, "use the rust-hardening
+skill"). The skills are also useful as standalone checklists for human reviewers.
 
 ## Contributing
 
