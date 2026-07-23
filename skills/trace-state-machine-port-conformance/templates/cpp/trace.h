@@ -4,8 +4,8 @@
 //
 // Emits JSON Lines to the file named by the TRACE_OUT env var.
 // When TRACE_OUT is unset, tracing is a no-op (zero behavioral impact).
-#ifndef PORT_VERIFY_TRACE_H
-#define PORT_VERIFY_TRACE_H
+#ifndef PORT_CONFORMANCE_TRACE_H
+#define PORT_CONFORMANCE_TRACE_H
 
 #include <initializer_list>
 #include <string>
@@ -22,4 +22,4 @@ void trace_event(const std::string& event,
 
 }  // namespace trace
 
-#endif  // PORT_VERIFY_TRACE_H
+#endif  // PORT_CONFORMANCE_TRACE_H

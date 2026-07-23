@@ -208,7 +208,7 @@ class ContractAndTraceTests(unittest.TestCase):
         contract["trace"]["events"]["Finish"]["coverage"] = "waived"
         contract["trace"]["events"]["Finish"][
             "coverage_reason"
-        ] = "error-only corpus for this verification stage"
+        ] = "error-only corpus for this conformance stage"
         diff_trace.validate_contract(contract)
         summary = diff_trace.coverage_summary(
             contract, result.observed, scope="trace"
@@ -568,7 +568,7 @@ class HarnessIntegrationTests(unittest.TestCase):
             )
 
             with contextlib.redirect_stdout(io.StringIO()):
-                result = run_diff.verify_case(args, contract, case)
+                result = run_diff.check_case(args, contract, case)
             self.assertTrue(result.ok, result.failures)
             self.assertFalse(result.audit_failures)
             self.assertIn("outcomes.stdout", result.observed)
@@ -608,7 +608,7 @@ class HarnessIntegrationTests(unittest.TestCase):
             )
 
             with contextlib.redirect_stdout(io.StringIO()):
-                result = run_diff.verify_case(args, contract, case)
+                result = run_diff.check_case(args, contract, case)
             self.assertFalse(result.ok)
             self.assertIsNotNone(result.repro_path)
             self.assertTrue((result.repro_path / "report.json").is_file())
@@ -664,7 +664,7 @@ class HarnessIntegrationTests(unittest.TestCase):
             )
 
             with contextlib.redirect_stdout(io.StringIO()):
-                result = run_diff.verify_case(args, contract, case)
+                result = run_diff.check_case(args, contract, case)
             self.assertTrue(result.ok, result.failures)
             self.assertIn("side_effects.files[*].path", result.observed)
             self.assertIn("side_effects.files[*].sha256", result.observed)
@@ -690,7 +690,7 @@ class HarnessIntegrationTests(unittest.TestCase):
             )
 
             with contextlib.redirect_stdout(io.StringIO()):
-                result = run_diff.verify_case(args, contract, case)
+                result = run_diff.check_case(args, contract, case)
             self.assertFalse(result.ok)
             failures = "\n".join(result.failures)
             self.assertIn("outcomes.stderr", failures)

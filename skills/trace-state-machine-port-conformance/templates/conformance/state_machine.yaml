@@ -1,4 +1,4 @@
-# Starter state machine. Copy into the target repo's verification/ and adapt.
+# Starter state machine. Copy into the target repo's conformance/ and adapt.
 # See ../../reference/state-machine-format.md for the full format and the
 # accepting-vs-terminal distinction.
 name: example_lifecycle

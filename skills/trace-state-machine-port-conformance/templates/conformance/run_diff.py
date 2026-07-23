@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed C++/Rust differential verification harness.
+"""Fail-closed C++/Rust conformance and equivalence checking harness.
 
 Each implementation receives:
 
@@ -14,11 +14,11 @@ Usage:
     python run_diff.py \
         --cpp-bin build/original \
         --rust-bin target/debug/ported \
-        --state-machine verification/state_machine.yaml \
-        --contract verification/equivalence_contract.json \
-        --cases verification/corpus \
-        --coverage-out verification/coverage.json \
-        --repro-dir verification/repro
+        --state-machine conformance/state_machine.yaml \
+        --contract conformance/equivalence_contract.json \
+        --cases conformance/corpus \
+        --coverage-out conformance/coverage.json \
+        --repro-dir conformance/repro
 """
 
 import argparse
@@ -240,7 +240,7 @@ def _comparison_report(result):
     }
 
 
-def verify_case(args, contract, case):
+def check_case(args, contract, case):
     case_result = CaseResult(case=case)
     report = {"case": str(case), "checks": {}}
 
@@ -400,7 +400,7 @@ def main(argv=None):
     parser.add_argument(
         "--repro-dir",
         type=Path,
-        default=Path("verification/repro"),
+        default=Path("conformance/repro"),
     )
     args = parser.parse_args(argv)
 
@@ -434,7 +434,7 @@ def main(argv=None):
         print(f"configuration/input error: {exc}", file=sys.stderr)
         return 2
 
-    results = [verify_case(args, contract, case) for case in cases]
+    results = [check_case(args, contract, case) for case in cases]
     observed = set().union(*(result.observed for result in results))
     coverage = diff_trace.coverage_summary(contract, observed, scope="all")
     if args.coverage_out is not None:

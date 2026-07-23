@@ -69,23 +69,23 @@ to match a broken original. Document the decision instead.
 
 ## Save every repro
 
-Every discovered failure must be preserved (in the target repo, under `verification/repro/`):
+Every discovered failure must be preserved (in the target repo, under `conformance/repro/`):
 
 ```text
-verification/repro/<issue-name>/input
-verification/repro/<issue-name>/cpp.trace.jsonl
-verification/repro/<issue-name>/rust.trace.jsonl
-verification/repro/<issue-name>/cpp.normalized.jsonl
-verification/repro/<issue-name>/rust.normalized.jsonl
-verification/repro/<issue-name>/cpp.stdout
-verification/repro/<issue-name>/rust.stdout
-verification/repro/<issue-name>/cpp.stderr
-verification/repro/<issue-name>/rust.stderr
-verification/repro/<issue-name>/cpp.exit_code
-verification/repro/<issue-name>/rust.exit_code
-verification/repro/<issue-name>/cpp.side_effects.json    # manifest mode
-verification/repro/<issue-name>/rust.side_effects.json   # manifest mode
-verification/repro/<issue-name>/report.json
+conformance/repro/<issue-name>/input
+conformance/repro/<issue-name>/cpp.trace.jsonl
+conformance/repro/<issue-name>/rust.trace.jsonl
+conformance/repro/<issue-name>/cpp.normalized.jsonl
+conformance/repro/<issue-name>/rust.normalized.jsonl
+conformance/repro/<issue-name>/cpp.stdout
+conformance/repro/<issue-name>/rust.stdout
+conformance/repro/<issue-name>/cpp.stderr
+conformance/repro/<issue-name>/rust.stderr
+conformance/repro/<issue-name>/cpp.exit_code
+conformance/repro/<issue-name>/rust.exit_code
+conformance/repro/<issue-name>/cpp.side_effects.json    # manifest mode
+conformance/repro/<issue-name>/rust.side_effects.json   # manifest mode
+conformance/repro/<issue-name>/report.json
 ```
 
 The repro `report.json` records the automated mismatches and audit failures. Add a companion
@@ -105,10 +105,10 @@ Minimization + regression loop:
 
 ```text
 for input in generated_inputs:
-    run differential verification
+    run differential conformance and equivalence checks
     if failed:
         minimize input
-        save to verification/repro/
+        save to conformance/repro/
         add regression test
 ```
 

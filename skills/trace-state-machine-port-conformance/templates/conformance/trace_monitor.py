@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Validate a normalized JSON Lines trace against a YAML state machine.
 
-Template — copy into the target repo's verification/ and adapt.
+Template — copy into the target repo's conformance/ and adapt.
 See ../../reference/state-machine-format.md.
 
 Usage:

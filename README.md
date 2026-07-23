@@ -1,6 +1,6 @@
 # rust_skills
 
-A collection of **skills for coding agents** that write, review, and verify Rust — with
+A collection of **skills for coding agents** that write, review, and check Rust — with
 a focus on soundness, robustness, and correct C/C++ interop.
 
 A *skill* is a Markdown file (`SKILL.md`) with YAML frontmatter that a compatible coding
@@ -15,7 +15,7 @@ the guidance. These skills are prescriptive checklists and patterns, not runnabl
 | [`rust-hardening`](skills/rust-hardening/) | Writing or reviewing **any** Rust. Enforces a zero-warning / zero-clippy build, bans hidden panics (`unwrap`/`expect`/`panic!`/indexing/slicing), forbids silently-overflowing arithmetic and lossy `as` casts, and requires runtime failures to propagate as `Result` unless verified local recovery fulfills the documented contract. Also rejects erased failures such as underscore bindings, default substitution, `Result`-to-`Option` conversion, and ignored overflow flags. Requires `rustfmt`; test and generated code may use scoped exceptions. |
 | [`rust-c-ffi-safety`](skills/rust-c-ffi-safety/) | Writing Rust that calls C (or C called from Rust) over FFI — `extern "C"`, unsafe wrappers, pointer/struct marshaling. Enforces 26 FFI soundness rules so foreign data is validated against Rust's safety invariants. |
 | [`rust-coverage-meaningful-tests`](skills/rust-coverage-meaningful-tests/) | Measuring or improving test coverage for a Rust crate. Uses coverage as a diagnostic map, not the objective: targets behavior, invariants, edge cases, error paths, `unsafe` contracts, and regression protection instead of shallow line-execution tests. |
-| [`trace-state-machine-port-verification`](skills/trace-state-machine-port-verification/) | Porting a C++ implementation to Rust and needing confidence the port is behavior-equivalent. Inventories all specification-level observables, validates a fail-closed trace/outcome/side-effect contract, supports field-specific floating-point policies, and requires complete contract coverage plus comparator mutation audit before declaring observable equivalence. |
+| [`trace-state-machine-port-conformance`](skills/trace-state-machine-port-conformance/) | Porting a C++ implementation to Rust and needing evidence that the port conforms to its contract and is observably equivalent to the original. Inventories every external or semantically observable value selected as in-scope by the port-equivalence contract, checks contract and state-machine conformance fail-closed, compares traces, outcomes, and side effects, and requires complete contract coverage plus comparator mutation audit. |
 | [`rust-realtime-implementation`](skills/rust-realtime-implementation/) | Implementing or writing RT-critical Rust where predictable WCET matters — ISRs, schedulers, drivers, packet fast paths, async poll loops, control loops, allocators, sync code. Favors bounded, allocation-free, panic-free, blocking-free designs with explicit WCET contracts over fast average-case code. |
 | [`rust-realtime-review`](skills/rust-realtime-review/) | Reviewing Rust patches, PRs, or files for real-time safety and WCET predictability — bounded execution, allocation-/panic-free RT paths, synchronization and async-poll bounds, hidden `Drop` work, and residual timing risks. Offers a quick-review mode and a deeper WCET-audit mode. |
 
@@ -37,7 +37,7 @@ skills/
     EvaluationCatalog.md         # legal/illegal C code pair per rule
   rust-coverage-meaningful-tests/
     SKILL.md                     # coverage-as-diagnostic test guidance
-  trace-state-machine-port-verification/
+  trace-state-machine-port-conformance/
     SKILL.md
     reference/                   # detailed sub-guides (normalization, triage, …)
     templates/                   # C++/Rust/Python trace + diff harness scaffolding

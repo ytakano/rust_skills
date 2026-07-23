@@ -3,12 +3,15 @@
 The abstract trace is the shared language both the C++ original and the Rust port speak.
 Both implementations must emit the **same event names and parameter shapes** so their
 behavior can be compared. The authoritative shapes and comparison policies live in
-`verification/equivalence_contract.json`; validate both traces against it before comparison.
+`conformance/equivalence_contract.json`; validate both traces against it before comparison.
 
 ## Complete observable inventory first
 
-“Complete” means every **in-scope specification-level observable**, not every local variable.
-Before instrumentation, fill in `trace_schema.md` with:
+“Complete” means every **external or semantically observable value selected as in-scope by
+the port-equivalence contract**, not every local variable. Determine the scope from the intended
+specification, public interfaces, existing tests, and behavior on which real users depend; do
+not assume that an undocumented behavior is automatically out of scope. Before instrumentation,
+fill in `trace_schema.md` with:
 
 - every public return value and error kind;
 - every specification state and state-changing value;
@@ -18,8 +21,9 @@ Before instrumentation, fill in `trace_schema.md` with:
 - the C++ and Rust observation point, contract path, comparator, and exercising tests.
 
 If a value has no contract path, it is not being compared. If a contract path has no
-observation point or test, it is not verified. Do not declare the port complete with a blank
-matrix cell.
+observation point or test, it is not checked. Do not declare the port complete with a blank
+matrix cell. Record explicit exclusions and their reasons; absence from the matrix is not an
+exclusion policy.
 
 ## Abstract trace
 

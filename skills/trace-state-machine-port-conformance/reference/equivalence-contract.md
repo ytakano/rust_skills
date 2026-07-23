@@ -10,17 +10,23 @@ fail-closed:
 - `additional_properties: true` is forbidden;
 - an ignored field or coverage waiver requires a non-empty reason.
 
-The contract establishes **complete accounting of specification-level
-observables**, not equality of every implementation-local variable. Build that
-accounting first in `trace_schema.md`: enumerate public results, errors,
-specification state, resource lifecycle, and external side effects; then map
-every row to a contract path, a C++ emission point, a Rust emission point, and
-at least one test.
+The contract establishes **complete accounting of every external or semantically
+observable value selected as in-scope by the port-equivalence contract**, not
+equality of every implementation-local variable. Determine that scope from the
+intended specification, public interfaces, existing tests, and behavior on which
+real users depend. A behavior can therefore be in-scope even when a specification
+document does not mention it.
+
+Build the accounting first in `trace_schema.md`: enumerate in-scope public
+results, errors, semantic state, resource lifecycle, and external side effects;
+then map every row to a contract path, a C++ emission point, a Rust emission
+point, and at least one test. Record every out-of-scope decision with a reason.
+An absent row is not an exclusion decision and must not become an implicit ignore.
 
 ## Contract structure
 
 Start from
-[`../templates/verification/equivalence_contract.json`](../templates/verification/equivalence_contract.json).
+[`../templates/conformance/equivalence_contract.json`](../templates/conformance/equivalence_contract.json).
 The top-level sections are mandatory:
 
 ```json

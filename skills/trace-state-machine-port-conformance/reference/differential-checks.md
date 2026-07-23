@@ -6,7 +6,7 @@ normalized traces, outputs, and side effects under the same fail-closed equivale
 
 ## The seven checks (single source of truth)
 
-For a corpus `C`, verify all of the following:
+For a corpus `C`, check all of the following:
 
 ```text
 1. validates(contract, normalize(trace_cpp(input)))             for every input in C
@@ -116,8 +116,8 @@ persistent state  resource lifecycle
 When side effects exist, capture them independently and write canonical JSON to
 `SIDE_EFFECTS_OUT`. The contract recursively validates and compares the manifests. A
 side-effect-free target may use reasoned `out_of_scope`; missing mode or an unresolved TODO
-is a verification failure.
+is a conformance-contract failure.
 
 See [equivalence-contract.md](./equivalence-contract.md) for the contract format and
-[`../templates/verification/run_diff.py`](../templates/verification/run_diff.py) for the
+[`../templates/conformance/run_diff.py`](../templates/conformance/run_diff.py) for the
 executable harness.

@@ -4,7 +4,7 @@ The state machine `M` is a **specification monitor**: it checks whether an abstr
 follows the allowed order, guards, and lifecycle rules. It is not, by itself, a proof of
 behavioral equivalence — see [differential-checks.md](./differential-checks.md).
 
-A state machine that accepts almost everything has little verification value. Make invalid
+A state machine that accepts almost everything provides little conformance evidence. Make invalid
 behavior explicit.
 
 ## What the state machine must express
@@ -109,7 +109,7 @@ These are different axes, easy to conflate. `accepting` is **not** the same as "
 succeeded". A clean error path (`... → ErrorRaised → Failed`) is a perfectly valid trace, so
 `Failed` **is** accepting. If you excluded error states from `accepting`, the monitor would
 reject every legitimate-error input — and the differential workflow requires *both* the C++
-and Rust traces to be accepted, so error-path inputs would be impossible to verify.
+and Rust traces to be accepted, so error-path inputs would be impossible to assess.
 
 What enforces "this input should have failed, not succeeded" is **not** the state machine —
 it is the differential checks: both implementations must reach the *same* terminal state

@@ -21,7 +21,7 @@ waiver:
 [ ] Comparator mutation audit passes for every observed semantic path.
 [ ] States, transitions, guard outcomes, boundaries, and declared errors are exercised.
 [ ] Floating policies are specification/error-analysis derived; normalization does not round them.
-[ ] Failures are saved under verification/repro/ and become regression tests.
+[ ] Failures are saved under conformance/repro/ and become regression tests.
 [ ] Nondeterminism is fixed, isolated, or explicitly modeled.
 [ ] Suspected C++ undefined/implementation-defined behavior is investigated or documented.
 ```
@@ -31,7 +31,7 @@ waiver:
 ```text
 Summary
 - Target component:
-- Verification files added or updated:
+- Conformance assets added or updated:
 - Corpus cases run / passed:
 - C++ state-machine acceptance:
 - Rust state-machine acceptance:

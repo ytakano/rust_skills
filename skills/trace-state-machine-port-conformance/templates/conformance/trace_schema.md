@@ -1,13 +1,17 @@
 # Observability and trace completeness matrix
 
-Copy this file into the target repo's `verification/` directory and complete it
+Copy this file into the target repo's `conformance/` directory and complete it
 **before** broad instrumentation. The authoritative machine-readable event
 schema and comparison rules live in `equivalence_contract.json`; do not
 duplicate them here.
 
-The verification target is every **in-scope specification-level observable**,
-not every implementation-local variable. Inventory the public results,
-errors, semantic states, resource lifecycle, and external side effects.
+The conformance and equivalence scope is every **external or semantically observable value
+selected as in-scope by the port-equivalence contract**, not every
+implementation-local variable. Select that scope using the intended
+specification, public interfaces, existing tests, and behavior on which real
+users depend. Inventory the public results, errors, semantic states, resource
+lifecycle, and external side effects. Record every explicit exclusion and its
+reason; absence from this matrix is not an exclusion decision.
 
 ## Observable inventory
 
@@ -72,6 +76,7 @@ Never round floating-point values during normalization.
 ## Completion
 
 - [ ] Every in-scope observable has a row and a machine-readable contract path.
+- [ ] Every explicit exclusion has a reason; there are no implicit exclusions.
 - [ ] Every C++ and Rust observation point is implemented, including errors and cleanup.
 - [ ] Every event/field has an explicit comparator or a reasoned ignore.
 - [ ] Unknown events/fields and missing required fields are rejected.

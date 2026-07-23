@@ -2,7 +2,7 @@
 
 Normalization maps both the C++ and Rust traces into a common form so they can be compared
 directly. Implement it as `normalize_trace.py` (see
-[../templates/verification/normalize_trace.py](../templates/verification/normalize_trace.py)).
+[../templates/conformance/normalize_trace.py](../templates/conformance/normalize_trace.py)).
 
 **Golden rule:** normalization is allowed to remove *noise*. It must **not** hide meaningful
 specification differences. Every normalization rule you add is a claim that "this difference

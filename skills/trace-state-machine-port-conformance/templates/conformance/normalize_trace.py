@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Normalize a JSON Lines trace into a comparable canonical form.
 
-Template — copy into the target repo's verification/ and adapt the rules.
+Template — copy into the target repo's conformance/ and adapt the rules.
 See ../../reference/normalization.md.
 
 Normalization removes NOISE only. It must never erase a meaningful spec difference
